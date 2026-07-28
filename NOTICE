@@ -1,0 +1,29 @@
+eRechnung
+Copyright 2026 Kai Krambeck and contributors
+
+This product includes software developed by third parties:
+
+Mustangproject (org.mustangproject)
+  Copyright the Mustangproject contributors
+  Licensed under the Apache License, Version 2.0
+  https://www.mustangproject.org/
+  https://github.com/ZUGFeRD/mustangproject
+
+KoSIT Validator (org.kosit / de.kosit.validationtool)
+  Copyright Coordination Office for IT Standards (KoSIT)
+  Licensed under the Apache License, Version 2.0
+  https://github.com/itplr-kosit/validator
+
+Validator Configuration for XRechnung
+  Copyright Coordination Office for IT Standards (KoSIT) and contributors
+  Includes EN 16931 Schematron and related artefacts
+  EN16931 artefacts are often licensed under EUPL-2.0
+  https://github.com/itplr-kosit/validator-configuration-xrechnung
+
+veraPDF (embedded via Mustang for PDF/A checks)
+  Copyright veraPDF Consortium
+  Licensed under the Mozilla Public License 2.0 (MPL-2.0)
+  https://verapdf.org/
+
+Jackson, SLF4J, and other transitive dependencies retain their respective licenses
+as listed in their Maven POM / LICENSE files.
