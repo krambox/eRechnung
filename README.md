@@ -21,13 +21,13 @@ Requires **JDK 17+** and Maven 3.9+.
 mvn -q package
 ```
 
-Artifact: `target/erechnung-0.1.0-SNAPSHOT.jar` (shaded Fat-JAR).
+Artifact: `target/erechnung-0.1.0.jar` (shaded Fat-JAR). Releases: attach the same JAR from GitHub Releases.
 
 ## Usage
 
 ```bash
-java -jar target/erechnung-0.1.0-SNAPSHOT.jar validate path/to/invoice.pdf
-java -jar target/erechnung-0.1.0-SNAPSHOT.jar validate path/to/invoice.xml
+java -jar target/erechnung-0.1.0.jar validate path/to/invoice.pdf
+java -jar target/erechnung-0.1.0.jar validate path/to/invoice.xml
 ```
 
 JSON on **stdout only** (always includes full `erechnung_xml`). No sidecar files.
