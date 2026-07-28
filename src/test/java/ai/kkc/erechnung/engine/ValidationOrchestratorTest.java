@@ -27,6 +27,9 @@ class ValidationOrchestratorTest {
     assertEquals("xrechnung", report.getMetadata().get("format"));
     assertTrue(report.getErechnungXml().contains("Invoice"));
     assertTrue((Boolean) ((java.util.Map<?, ?>) report.getMetadata().get("engines")).get("kosit"));
+    assertEquals(
+        "absent",
+        ((java.util.Map<?, ?>) report.getMetadata().get("pdfa")).get("status"));
   }
 
   @Test

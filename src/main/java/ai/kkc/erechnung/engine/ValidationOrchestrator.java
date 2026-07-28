@@ -62,6 +62,7 @@ public final class ValidationOrchestrator {
       metadata.put("filename", filename);
       metadata.put("format", DetectedFormat.NOT_ERECHNUNG.name().toLowerCase());
       metadata.put("engines", Map.of("mustang", true, "kosit", false));
+      metadata.put("pdfa", mustangResult.pdfa().toMetadata());
       report.setMetadata(metadata);
       return report;
     }
@@ -91,6 +92,7 @@ public final class ValidationOrchestrator {
     metadata.put("profile", mustangResult.profile());
     metadata.put("generation", mustangResult.generation());
     metadata.put("engines", Map.of("mustang", true, "kosit", kositRan));
+    metadata.put("pdfa", mustangResult.pdfa().toMetadata());
     report.setMetadata(metadata);
     return report;
   }

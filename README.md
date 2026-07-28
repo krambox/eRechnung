@@ -21,13 +21,13 @@ Requires **JDK 17+** and Maven 3.9+.
 mvn -q package
 ```
 
-Artifact: `target/erechnung-0.1.0.jar` (shaded Fat-JAR). Releases: attach the same JAR from GitHub Releases.
+Artifact: `target/erechnung-0.2.0.jar` (shaded Fat-JAR). Releases: attach the same JAR from GitHub Releases.
 
 ## Usage
 
 ```bash
-java -jar target/erechnung-0.1.0.jar validate path/to/invoice.pdf
-java -jar target/erechnung-0.1.0.jar validate path/to/invoice.xml
+java -jar target/erechnung-0.2.0.jar validate path/to/invoice.pdf
+java -jar target/erechnung-0.2.0.jar validate path/to/invoice.xml
 ```
 
 JSON on **stdout only** (always includes full `erechnung_xml`). No sidecar files.
@@ -53,11 +53,14 @@ JSON on **stdout only** (always includes full `erechnung_xml`). No sidecar files
     "filename": "invoice.xml",
     "format": "xrechnung",
     "profile": "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
-    "engines": {"mustang": true, "kosit": true}
+    "engines": {"mustang": true, "kosit": true},
+    "pdfa": {"status": "absent", "engine": "verapdf"}
   },
   "erechnung_xml": "…"
 }
 ```
+
+For PDF hybrids, `metadata.pdfa` is `conformant` / `nonconformant` plus veraPDF `flavour` (e.g. `3b`), `total_assertions`, and failed `assertions` (`clause`, `test`, `message`, `location`, …). PDF/A failures also appear as a `mustang`/`pdfa` error when Mustang does not emit a discrete section-23 finding.
 
 ## License
 
