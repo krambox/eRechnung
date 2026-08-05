@@ -6,6 +6,8 @@ import ai.kkc.erechnung.model.ValidationReport;
 import ai.kkc.erechnung.model.Verdict;
 import ai.kkc.erechnung.policy.ConformancePolicy;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Fat-JAR entrypoint: {@code java -jar eRechnung.jar validate <PATH>}.
@@ -45,8 +47,13 @@ public final class App {
     } catch (Exception ex) {
       ValidationReport errorReport = new ValidationReport();
       errorReport.setVerdict(Verdict.TOOL_ERROR);
-      errorReport.getMetadata().put("error", ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+      Map<String, Object> summary = new LinkedHashMap<>();
+      summary.put(
+          "error",
+          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+      errorReport.setSummary(summary);
       errorReport.setErechnungXml("");
+      errorReport.setMustangPruefbericht("");
       try {
         System.out.println(json.toJson(errorReport));
       } catch (Exception ignored) {
@@ -72,7 +79,7 @@ public final class App {
           2  not_erechnung
           3  tool/IO error
 
-        JSON is written to stdout only (includes full erechnung_xml).
+        JSON is written to stdout only (verdict, summary, erechnung, mustang-pruefbericht).
         """);
   }
 }

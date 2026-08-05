@@ -1,5 +1,6 @@
 package ai.kkc.erechnung.engine;
 
+import ai.kkc.erechnung.model.CheckSection;
 import ai.kkc.erechnung.model.Finding;
 import ai.kkc.erechnung.model.Severity;
 import de.kosit.validationtool.api.Check;
@@ -54,10 +55,13 @@ public final class KositEngine {
 
   public List<Finding> validateXml(String xml, String name) {
     if (xml == null || xml.isBlank()) {
-      return List.of(Finding.error("kosit", "empty", "no XML for KoSIT validation"));
+      return List.of(
+          Finding.error(
+              "kosit", "empty", "no XML for KoSIT validation", CheckSection.SCHEMA, null));
     }
     byte[] bytes = xml.getBytes(StandardCharsets.UTF_8);
-    Input input = InputFactory.read(new ByteArrayInputStream(bytes), name == null ? "invoice.xml" : name);
+    Input input =
+        InputFactory.read(new ByteArrayInputStream(bytes), name == null ? "invoice.xml" : name);
     Result result = check.checkInput(input);
     return mapResult(result);
   }
@@ -66,19 +70,27 @@ public final class KositEngine {
     List<Finding> findings = new ArrayList<>();
     if (!result.isProcessingSuccessful()) {
       for (String err : result.getProcessingErrors()) {
-        findings.add(Finding.error("kosit", "processing", err));
+        findings.add(Finding.error("kosit", "processing", err, CheckSection.SCHEMA, null));
       }
       if (findings.isEmpty()) {
-        findings.add(Finding.error("kosit", "processing", "KoSIT processing unsuccessful"));
+        findings.add(
+            Finding.error(
+                "kosit",
+                "processing",
+                "KoSIT processing unsuccessful",
+                CheckSection.SCHEMA,
+                null));
       }
       return findings;
     }
     if (!result.isWellformed()) {
-      findings.add(Finding.error("kosit", "wellformed", "XML is not well-formed"));
+      findings.add(
+          Finding.error(
+              "kosit", "wellformed", "XML is not well-formed", CheckSection.SCHEMA, null));
     }
     for (XmlError violation : result.getSchemaViolations()) {
       String msg = violation.getMessage() == null ? "schema violation" : violation.getMessage();
-      findings.add(Finding.error("kosit", "schema", msg));
+      findings.add(Finding.error("kosit", "schema", msg, CheckSection.SCHEMA, null));
     }
     for (FailedAssert failed : result.getFailedAsserts()) {
       findings.add(mapFailedAssert(failed));
@@ -92,8 +104,9 @@ public final class KositEngine {
     if (message.isBlank()) {
       message = failed.getTest() == null ? id : failed.getTest();
     }
+    String location = failed.getLocation();
     Severity severity = severityFromFlag(failed.getFlag());
-    return new Finding(severity, "kosit", id, message);
+    return new Finding(severity, "kosit", id, message, CheckSection.SCHEMATRON, location);
   }
 
   private static Severity severityFromFlag(String flag) {

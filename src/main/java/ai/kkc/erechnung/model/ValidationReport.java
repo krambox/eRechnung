@@ -5,15 +5,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Final JSON report for one validate invocation. */
+/** Final report for one validate invocation (JSON contract 0.3). */
 public final class ValidationReport {
 
   private Verdict verdict;
   private List<Finding> errors = new ArrayList<>();
   private List<Finding> warnings = new ArrayList<>();
   private List<Finding> notices = new ArrayList<>();
-  private Map<String, Object> metadata = new LinkedHashMap<>();
+  private Map<String, Object> summary = new LinkedHashMap<>();
   private String erechnungXml = "";
+  private String mustangPruefbericht = "";
 
   public Verdict getVerdict() {
     return verdict;
@@ -47,12 +48,12 @@ public final class ValidationReport {
     this.notices = notices;
   }
 
-  public Map<String, Object> getMetadata() {
-    return metadata;
+  public Map<String, Object> getSummary() {
+    return summary;
   }
 
-  public void setMetadata(Map<String, Object> metadata) {
-    this.metadata = metadata;
+  public void setSummary(Map<String, Object> summary) {
+    this.summary = summary == null ? new LinkedHashMap<>() : summary;
   }
 
   public String getErechnungXml() {
@@ -61,6 +62,14 @@ public final class ValidationReport {
 
   public void setErechnungXml(String erechnungXml) {
     this.erechnungXml = erechnungXml == null ? "" : erechnungXml;
+  }
+
+  public String getMustangPruefbericht() {
+    return mustangPruefbericht;
+  }
+
+  public void setMustangPruefbericht(String mustangPruefbericht) {
+    this.mustangPruefbericht = mustangPruefbericht == null ? "" : mustangPruefbericht;
   }
 
   public void addFinding(Finding finding) {

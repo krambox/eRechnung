@@ -4,7 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ai.kkc.erechnung.json.ReportJson;
 import ai.kkc.erechnung.model.Verdict;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -13,6 +16,8 @@ class ValidationOrchestratorTest {
 
   private static ValidationOrchestrator orchestrator;
   private static Path fixtures;
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+  private static final ReportJson JSON = new ReportJson();
 
   @BeforeAll
   static void setUp() {
@@ -24,12 +29,14 @@ class ValidationOrchestratorTest {
   void knownGoodXRechnungIsConformant() throws Exception {
     var report = orchestrator.validate(fixtures.resolve("good-xr-ubl.xml"));
     assertEquals(Verdict.CONFORMANT, report.getVerdict());
-    assertEquals("xrechnung", report.getMetadata().get("format"));
+    assertEquals("xrechnung", report.getSummary().get("format"));
     assertTrue(report.getErechnungXml().contains("Invoice"));
-    assertTrue((Boolean) ((java.util.Map<?, ?>) report.getMetadata().get("engines")).get("kosit"));
-    assertEquals(
-        "absent",
-        ((java.util.Map<?, ?>) report.getMetadata().get("pdfa")).get("status"));
+    assertTrue((Boolean) ((java.util.Map<?, ?>) report.getSummary().get("engines")).get("kosit"));
+    assertTrue(report.getMustangPruefbericht().contains("<validation"));
+    JsonNode root = MAPPER.readTree(JSON.toJson(report));
+    assertFalse(root.get("summary").get("sections").get("pdfa").get("applicable").asBoolean());
+    assertTrue(root.has("erechnung"));
+    assertTrue(root.has("mustang-pruefbericht"));
   }
 
   @Test
@@ -52,6 +59,7 @@ class ValidationOrchestratorTest {
     assertEquals(Verdict.NONCONFORMANT, report.getVerdict());
     assertFalse(report.getErrors().isEmpty());
     assertTrue(
-        report.getErrors().stream().anyMatch(f -> "kosit".equals(f.engine()) || "mustang".equals(f.engine())));
+        report.getErrors().stream()
+            .anyMatch(f -> "kosit".equals(f.engine()) || "mustang".equals(f.engine())));
   }
 }

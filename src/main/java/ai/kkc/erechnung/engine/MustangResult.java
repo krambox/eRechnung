@@ -1,5 +1,6 @@
 package ai.kkc.erechnung.engine;
 
+import ai.kkc.erechnung.model.CheckSection;
 import ai.kkc.erechnung.model.DetectedFormat;
 import ai.kkc.erechnung.model.Finding;
 import ai.kkc.erechnung.model.PdfAResult;
@@ -23,7 +24,9 @@ public record MustangResult(
         null,
         false,
         "",
-        List.of(Finding.notice("mustang", "format", reason)),
+        List.of(
+            Finding.notice(
+                "mustang", "format", reason, CheckSection.SCHEMATRON, null)),
         false,
         PdfAResult.absent());
   }
@@ -35,7 +38,9 @@ public record MustangResult(
         null,
         false,
         "",
-        List.of(Finding.error("mustang", "exception", message)),
+        List.of(
+            Finding.error(
+                "mustang", "exception", message, CheckSection.SCHEMATRON, null)),
         true,
         PdfAResult.absent());
   }

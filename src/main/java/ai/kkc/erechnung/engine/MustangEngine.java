@@ -1,5 +1,6 @@
 package ai.kkc.erechnung.engine;
 
+import ai.kkc.erechnung.model.CheckSection;
 import ai.kkc.erechnung.model.DetectedFormat;
 import ai.kkc.erechnung.model.Finding;
 import ai.kkc.erechnung.model.PdfAResult;
@@ -10,10 +11,8 @@ import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -27,19 +26,10 @@ import org.xml.sax.InputSource;
 /** Runs Mustang validation and maps the XML report into findings + format. */
 public final class MustangEngine {
 
-  /** veraPDF dumps {@code ValidationResult [flavour=3b, …, isCompliant=false]} into {@code <pdf>}. */
   private static final Pattern VERAPDF_FLAVOUR = Pattern.compile("flavour=([\\w.-]+)");
-  private static final Pattern VERAPDF_TOTAL =
-      Pattern.compile("totalAssertions=(\\d+)");
-  private static final Pattern ASSERTION_SPEC =
-      Pattern.compile("specification=([^\\],]+)");
-  private static final Pattern ASSERTION_CLAUSE = Pattern.compile("clause=([^\\],]+)");
-  private static final Pattern ASSERTION_TEST = Pattern.compile("testNumber=(\\d+)");
-  private static final Pattern ASSERTION_STATUS = Pattern.compile("status=(\\w+)");
-  private static final Pattern ASSERTION_LOCATION_CTX =
-      Pattern.compile("location=Location \\[level=([^,]*), context=(.*)\\], locationContext=");
-  private static final Pattern ASSERTION_ERROR =
-      Pattern.compile("errorMessage=(.*)$", Pattern.DOTALL);
+  private static final Pattern BRACKET_ID = Pattern.compile("\\[ID\\s+([^\\]]+)\\]");
+  private static final Pattern RULE_PREFIX =
+      Pattern.compile("\\[(PEPPOL-[A-Z0-9-]+|BR-DE-[A-Z0-9-]+)\\]");
 
   private final FormatDetector formatDetector;
 
@@ -88,30 +78,42 @@ public final class MustangEngine {
       DetectedFormat format = formatDetector.fromProfile(profile);
 
       List<Finding> findings = new ArrayList<>();
-      collectMessages(doc.getElementsByTagName("error"), Severity.ERROR, findings);
-      collectMessages(doc.getElementsByTagName("exception"), Severity.ERROR, findings);
-      collectMessages(doc.getElementsByTagName("warning"), Severity.WARNING, findings);
-      collectMessages(doc.getElementsByTagName("notice"), Severity.NOTICE, findings);
-
-      PdfAResult pdfa = parsePdfA(doc);
-      if (PdfAResult.NONCONFORMANT.equals(pdfa.status())
-          && findings.stream().noneMatch(f -> "pdfa".equals(f.id()) || "23".equals(f.id()))) {
-        String msg =
-            pdfa.flavour() == null
-                ? "PDF/A validation failed (veraPDF)"
-                : "PDF/A validation failed (veraPDF isCompliant=false, flavour="
-                    + pdfa.flavour()
-                    + ")";
-        findings.add(0, Finding.error("mustang", "pdfa", msg));
+      Element pdf = firstElement(doc, "pdf");
+      Element xml = firstElement(doc, "xml");
+      if (pdf != null) {
+        collectMessages(pdf, Severity.ERROR, CheckSection.PDFA, findings);
+        collectMessages(pdf, Severity.WARNING, CheckSection.PDFA, findings);
+        collectMessages(pdf, Severity.NOTICE, CheckSection.EMBEDDED_XML, findings);
+      }
+      if (xml != null) {
+        collectMessages(xml, Severity.ERROR, CheckSection.SCHEMATRON, findings);
+        collectMessages(xml, Severity.WARNING, CheckSection.SCHEMATRON, findings);
+        collectMessages(xml, Severity.NOTICE, CheckSection.SCHEMATRON, findings);
       }
 
-      // If Mustang summary says invalid but no error nodes were parsed, keep policy honest.
+      PdfAResult pdfa = parsePdfA(doc);
+      boolean hasPdfaError =
+          findings.stream()
+              .anyMatch(f -> f.isError() && CheckSection.PDFA.equals(f.section()));
+      if (PdfAResult.NONCONFORMANT.equals(pdfa.status()) && !hasPdfaError) {
+        findings.add(
+            0,
+            Finding.error(
+                "mustang",
+                "MUSTANG_23",
+                "PDF/A validation failed",
+                CheckSection.PDFA,
+                null));
+      }
+
       if (!completelyValid && findings.stream().noneMatch(Finding::isError)) {
         findings.add(
             Finding.error(
                 "mustang",
-                "summary",
-                "Mustang reported invalid without discrete error messages"));
+                "MUSTANG_summary",
+                "Mustang reported invalid without discrete error messages",
+                CheckSection.SCHEMATRON,
+                null));
       }
 
       if (format == DetectedFormat.NOT_ERECHNUNG && profile != null && !profile.isBlank()) {
@@ -120,9 +122,17 @@ public final class MustangEngine {
             Finding.notice(
                 "mustang",
                 "profile",
-                "profile not accepted for DE B2B e-invoice mandate: " + profile));
+                "profile not accepted for DE B2B e-invoice mandate: " + profile,
+                CheckSection.SCHEMATRON,
+                null));
       } else if (format == DetectedFormat.NOT_ERECHNUNG && findings.isEmpty()) {
-        findings.add(Finding.notice("mustang", "format", "no acceptable e-invoice profile detected"));
+        findings.add(
+            Finding.notice(
+                "mustang",
+                "format",
+                "no acceptable e-invoice profile detected",
+                CheckSection.SCHEMATRON,
+                null));
       }
 
       return new MustangResult(
@@ -139,11 +149,6 @@ public final class MustangEngine {
     }
   }
 
-  /**
-   * Surfaces veraPDF PDF/A result from Mustang's {@code <pdf>} section. Mustang embeds
-   * {@code ValidationResult.toString()} (not structured XML) and only emits section 23 when the
-   * flavour is not PDF/A-3 — {@code isCompliant=false} otherwise leaves no discrete finding.
-   */
   static PdfAResult parsePdfA(Document doc) {
     NodeList pdfNodes = doc.getElementsByTagName("pdf");
     if (pdfNodes.getLength() == 0) {
@@ -157,106 +162,24 @@ public final class MustangEngine {
     if (flavourMatch.find()) {
       flavour = flavourMatch.group(1);
     }
-    Integer totalAssertions = null;
-    Matcher totalMatch = VERAPDF_TOTAL.matcher(pdfText);
-    if (totalMatch.find()) {
-      totalAssertions = Integer.valueOf(totalMatch.group(1));
-    }
-    List<Map<String, Object>> assertions = parseVeraPdfAssertions(pdfText);
 
     boolean notPdfA3 =
         pdfText.contains("Not a PDF/A-3") || (flavour != null && !isPdfA3Flavour(flavour));
     if (pdfText.contains("isCompliant=false") || notPdfA3) {
-      return PdfAResult.of(PdfAResult.NONCONFORMANT, flavour, totalAssertions, assertions);
+      return PdfAResult.of(PdfAResult.NONCONFORMANT, flavour);
     }
     if (pdfText.contains("isCompliant=true")) {
-      return PdfAResult.of(PdfAResult.CONFORMANT, flavour, totalAssertions, assertions);
+      return PdfAResult.of(PdfAResult.CONFORMANT, flavour);
     }
 
-    // No veraPDF dump — fall back to <pdf><summary status="…"/>.
     NodeList summaries = pdf.getElementsByTagName("summary");
     if (summaries.getLength() > 0) {
       String status = ((Element) summaries.item(0)).getAttribute("status");
       if ("valid".equalsIgnoreCase(status)) {
-        return PdfAResult.of(PdfAResult.CONFORMANT, flavour, totalAssertions, assertions);
+        return PdfAResult.of(PdfAResult.CONFORMANT, flavour);
       }
     }
-    return PdfAResult.of(PdfAResult.NONCONFORMANT, flavour, totalAssertions, assertions);
-  }
-
-  /** Parses failed {@code TestAssertion […]} blocks from veraPDF's {@code toString()} dump. */
-  static List<Map<String, Object>> parseVeraPdfAssertions(String pdfText) {
-    List<Map<String, Object>> out = new ArrayList<>();
-    int from = 0;
-    while (true) {
-      int start = pdfText.indexOf("TestAssertion [", from);
-      if (start < 0) {
-        break;
-      }
-      int contentStart = start + "TestAssertion [".length();
-      int end = matchingCloseBracket(pdfText, contentStart);
-      if (end < 0) {
-        break;
-      }
-      String block = pdfText.substring(contentStart, end);
-      from = end + 1;
-
-      String status = matchGroup(ASSERTION_STATUS, block);
-      if (status != null && !"failed".equalsIgnoreCase(status)) {
-        continue;
-      }
-
-      Map<String, Object> item = new LinkedHashMap<>();
-      String spec = matchGroup(ASSERTION_SPEC, block);
-      String clause = matchGroup(ASSERTION_CLAUSE, block);
-      String test = matchGroup(ASSERTION_TEST, block);
-      if (spec != null) {
-        item.put("specification", spec.trim());
-      }
-      if (clause != null) {
-        item.put("clause", clause.trim());
-      }
-      if (test != null) {
-        item.put("test", Integer.valueOf(test));
-      }
-      if (status != null) {
-        item.put("status", status);
-      }
-      Matcher loc = ASSERTION_LOCATION_CTX.matcher(block);
-      if (loc.find()) {
-        item.put("location", loc.group(2).trim());
-      }
-      String error = matchGroup(ASSERTION_ERROR, block);
-      if (error != null && !error.isBlank()) {
-        item.put("message", error.trim());
-      }
-      if (!item.isEmpty()) {
-        out.add(item);
-      }
-    }
-    return out;
-  }
-
-  /** Index of {@code ]} matching the open bracket before {@code contentStart}. */
-  private static int matchingCloseBracket(String s, int contentStart) {
-    int depth = 1;
-    for (int i = contentStart; i < s.length(); i++) {
-      char c = s.charAt(i);
-      if (c == '[') {
-        depth++;
-      } else if (c == ']') {
-        depth--;
-        if (depth == 0) {
-          return i;
-        }
-      }
-    }
-    return -1;
-  }
-
-  private static String matchGroup(Pattern pattern, String text) {
-    Matcher m = pattern.matcher(text);
-    return m.find() ? m.group(1) : null;
+    return PdfAResult.of(PdfAResult.NONCONFORMANT, flavour);
   }
 
   private static boolean isPdfA3Flavour(String flavour) {
@@ -268,38 +191,92 @@ public final class MustangEngine {
         || f.contains("pdf/a-3");
   }
 
-  private static void collectMessages(NodeList nodes, Severity severity, List<Finding> findings) {
+  private static void collectMessages(
+      Element parent, Severity severity, String defaultSection, List<Finding> findings) {
+    String tag =
+        switch (severity) {
+          case ERROR -> "error";
+          case WARNING -> "warning";
+          case NOTICE -> "notice";
+        };
+    // also collect <exception> as errors
+    collectTag(parent, tag, severity, defaultSection, findings);
+    if (severity == Severity.ERROR) {
+      collectTag(parent, "exception", severity, defaultSection, findings);
+    }
+  }
+
+  private static void collectTag(
+      Element parent,
+      String tag,
+      Severity severity,
+      String defaultSection,
+      List<Finding> findings) {
+    NodeList nodes = parent.getElementsByTagName(tag);
     for (int i = 0; i < nodes.getLength(); i++) {
       Node node = nodes.item(i);
       if (!(node instanceof Element el)) {
         continue;
       }
-      String id = el.getAttribute("criterion");
-      if (id == null || id.isBlank()) {
-        id = el.getAttribute("type");
-      }
+      String type = el.getAttribute("type");
+      String location = blankToNull(el.getAttribute("location"));
       String message = el.getTextContent() == null ? "" : el.getTextContent().trim();
-      String extractedId = extractBracketId(message);
-      if (extractedId != null) {
-        id = extractedId;
-      }
-      if (id == null || id.isBlank()) {
-        id = severity.name().toLowerCase(Locale.ROOT);
-      }
-      findings.add(new Finding(severity, "mustang", id, message));
+      String id = resolveId(type, message);
+      String section = sectionFor(type, defaultSection);
+      findings.add(new Finding(severity, "mustang", id, message, section, location));
     }
   }
 
-  private static String extractBracketId(String message) {
-    int start = message.indexOf("[ID ");
-    if (start < 0) {
+  static String resolveId(String type, String message) {
+    String fromId = matchGroup(BRACKET_ID, message);
+    if (fromId != null) {
+      return fromId.trim();
+    }
+    String fromRule = matchGroup(RULE_PREFIX, message);
+    if (fromRule != null) {
+      return fromRule.trim();
+    }
+    if (type != null && type.matches("\\d+")) {
+      return "MUSTANG_" + type;
+    }
+    if (type != null && !type.isBlank() && !"false".equalsIgnoreCase(type)) {
+      return type;
+    }
+    return "mustang";
+  }
+
+  static String sectionFor(String type, String defaultSection) {
+    // Parent origin (pdf→pdfa, xml→schematron) is primary; overrides only for unambiguous types.
+    if ("18".equals(type)) {
+      return CheckSection.SCHEMA;
+    }
+    if ("17".equals(type)) {
+      return CheckSection.EMBEDDED_XML;
+    }
+    if ("4".equals(type)) {
+      return CheckSection.SCHEMATRON;
+    }
+    return defaultSection;
+  }
+
+  private static String matchGroup(Pattern pattern, String text) {
+    if (text == null) {
       return null;
     }
-    int end = message.indexOf(']', start);
-    if (end < 0) {
+    Matcher m = pattern.matcher(text);
+    return m.find() ? m.group(1) : null;
+  }
+
+  private static String blankToNull(String s) {
+    return s == null || s.isBlank() ? null : s;
+  }
+
+  private static Element firstElement(Document doc, String tag) {
+    NodeList list = doc.getElementsByTagName(tag);
+    if (list.getLength() == 0) {
       return null;
     }
-    return message.substring(start + 4, end).trim();
+    return (Element) list.item(0);
   }
 
   private static String textOfFirst(Document doc, String tag) {

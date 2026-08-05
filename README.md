@@ -21,16 +21,16 @@ Requires **JDK 17+** and Maven 3.9+.
 mvn -q package
 ```
 
-Artifact: `target/erechnung-0.2.0.jar` (shaded Fat-JAR). Releases: attach the same JAR from GitHub Releases.
+Artifact: `target/erechnung-0.3.0.jar` (shaded Fat-JAR). Releases: attach the same JAR from GitHub Releases.
 
 ## Usage
 
 ```bash
-java -jar target/erechnung-0.2.0.jar validate path/to/invoice.pdf
-java -jar target/erechnung-0.2.0.jar validate path/to/invoice.xml
+java -jar target/erechnung-0.3.0.jar validate path/to/invoice.pdf
+java -jar target/erechnung-0.3.0.jar validate path/to/invoice.xml
 ```
 
-JSON on **stdout only** (always includes full `erechnung_xml`). No sidecar files.
+JSON on **stdout only**. No sidecar files.
 
 ### Verdict & exit codes
 
@@ -41,26 +41,45 @@ JSON on **stdout only** (always includes full `erechnung_xml`). No sidecar files
 | `not_erechnung` | 2 | Not an accepted e-invoice format |
 | `tool_error` | 3 | Missing file, bad args, internal failure |
 
-### JSON shape
+### JSON shape (0.3)
 
 ```json
 {
-  "verdict": "conformant",
-  "errors": [],
-  "warnings": [],
-  "notices": [{"engine": "mustang", "id": "…", "message": "…", "severity": "notice"}],
-  "metadata": {
-    "filename": "invoice.xml",
-    "format": "xrechnung",
-    "profile": "urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0",
-    "engines": {"mustang": true, "kosit": true},
-    "pdfa": {"status": "absent", "engine": "verapdf"}
+  "verdict": "nonconformant",
+  "summary": {
+    "filename": "invoice.pdf",
+    "duration_ms": 200,
+    "format": "facturx_en16931",
+    "generation": "2",
+    "profile": "urn:cen.eu:en16931:2017",
+    "attachment": "factur-x.xml",
+    "validator": { "mustang": "2.24.0" },
+    "engines": { "mustang": true, "kosit": false },
+    "sections": {
+      "schema": { "applicable": true, "status": "ok" },
+      "schematron": { "applicable": true, "status": "warning" },
+      "pdfa": { "applicable": true, "status": "error" },
+      "embedded_xml": { "applicable": true, "status": "ok" },
+      "metadata_embedding": { "applicable": true, "status": "ok" }
+    },
+    "errors": [
+      {
+        "engine": "mustang",
+        "section": "pdfa",
+        "id": "MUSTANG_11",
+        "message": "XMP Metadata: ConformanceLevel not found",
+        "location": null
+      }
+    ],
+    "warnings": [],
+    "notices": []
   },
-  "erechnung_xml": "…"
+  "erechnung": "…",
+  "mustang-pruefbericht": "<validation>…</validation>"
 }
 ```
 
-For PDF hybrids, `metadata.pdfa` is `conformant` / `nonconformant` plus veraPDF `flavour` (e.g. `3b`), `total_assertions`, and failed `assertions` (`clause`, `test`, `message`, `location`, …). PDF/A failures also appear as a `mustang`/`pdfa` error when Mustang does not emit a discrete section-23 finding.
+`erechnung` is the invoice XML; `mustang-pruefbericht` is Mustang’s raw report (incl. veraPDF dumps). Section status is `ok` | `error` | `warning` | `notice` (worst finding in that section). Pure XML input marks `pdfa` / `embedded_xml` / `metadata_embedding` as `applicable: false`.
 
 ## License
 
