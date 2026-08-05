@@ -29,11 +29,23 @@ Artifact: `target/erechnung-0.3.0.jar` (shaded Fat-JAR). Releases: attach the sa
 java -jar target/erechnung-0.3.0.jar validate path/to/invoice.pdf
 java -jar target/erechnung-0.3.0.jar validate path/to/invoice.xml
 java -jar target/erechnung-0.3.0.jar validate --max-xml-size=5MiB path/to/invoice.xml
+java -jar target/erechnung-0.3.0.jar validate --serve --port=8092
 ```
 
-JSON on **stdout only**. No sidecar files.
+JSON on **stdout only** for one-shot mode. No sidecar files.
 
 Invoice XML larger than `--max-xml-size` (default **5MiB**), whether standalone or extracted from a PDF hybrid, yields `verdict: tool_error` with `summary.error` / `xml_bytes` / `max_xml_bytes` and exit code `3` — engines are not run.
+
+### `--serve` (warm JVM)
+
+Localhost HTTP daemon (default bind `127.0.0.1`) so hosts avoid spawning a new JVM per request:
+
+| Method | Path | Notes |
+|--------|------|--------|
+| `GET` | `/healthz` | `{"status":"ok"}` |
+| `POST` | `/validate` | multipart field `file` (`.pdf` / `.xml`) |
+
+One validation worker; FIFO queue; `--queue-wait` (default **20s**) → HTTP **503** if not started in time. Upload temps are process-scoped.
 
 ### Verdict & exit codes
 
