@@ -88,11 +88,15 @@ public final class KositEngine {
           Finding.error(
               "kosit", "wellformed", "XML is not well-formed", CheckSection.SCHEMA, null));
     }
-    for (XmlError violation : result.getSchemaViolations()) {
+    for (XmlError violation :
+        result.getSchemaViolations() == null ? List.<XmlError>of() : result.getSchemaViolations()) {
       String msg = violation.getMessage() == null ? "schema violation" : violation.getMessage();
       findings.add(Finding.error("kosit", "schema", msg, CheckSection.SCHEMA, null));
     }
-    for (FailedAssert failed : result.getFailedAsserts()) {
+    for (FailedAssert failed :
+        result.getFailedAsserts() == null
+            ? List.<FailedAssert>of()
+            : result.getFailedAsserts()) {
       findings.add(mapFailedAssert(failed));
     }
     return List.copyOf(findings);

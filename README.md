@@ -81,6 +81,17 @@ JSON on **stdout only**. No sidecar files.
 
 `erechnung` is the invoice XML; `mustang-pruefbericht` is Mustang’s raw report (incl. veraPDF dumps). Section status is `ok` | `error` | `warning` | `notice` (worst finding in that section). Pure XML input marks `pdfa` / `embedded_xml` / `metadata_embedding` as `applicable: false`.
 
+## Corpus tests
+
+The [ZUGFeRD/corpus](https://github.com/ZUGFeRD/corpus) submodule under `corpus/` holds labeled PDF/XML samples (`correct` / `fail` / `valid`, plus `XML-Rechnung`).
+
+```bash
+git submodule update --init
+mvn -Pcorpus test
+```
+
+        Default `mvn test` skips `@Tag("corpus")` (slow). Expectations: `fail` → not conformant; `correct`/`valid` EN16931/Extended/XRechnung → `conformant`; BASIC/MINIMUM and foreign formats → `not_erechnung`. Known Mustang↔corpus drifts are listed in `src/test/resources/corpus-expectation-overrides.tsv`.
+
 ## License
 
 Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
