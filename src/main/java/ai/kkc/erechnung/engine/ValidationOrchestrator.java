@@ -1,14 +1,14 @@
 package ai.kkc.erechnung.engine;
 
-import ai.kkc.erechnung.model.CheckSection;
+import ai.kkc.erechnung.XmlSizeLimit;
 import ai.kkc.erechnung.model.DetectedFormat;
 import ai.kkc.erechnung.model.EngineFindings;
 import ai.kkc.erechnung.model.Finding;
-import ai.kkc.erechnung.model.PdfAResult;
 import ai.kkc.erechnung.model.ValidationReport;
 import ai.kkc.erechnung.model.Verdict;
 import ai.kkc.erechnung.policy.ConformancePolicy;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -28,25 +28,41 @@ public final class ValidationOrchestrator {
   private final KositEngine kosit;
   private final XmlExtractor xmlExtractor;
   private final ConformancePolicy policy;
+  private final long maxXmlBytes;
 
   public ValidationOrchestrator(
       MustangEngine mustang,
       KositEngine kosit,
       XmlExtractor xmlExtractor,
       ConformancePolicy policy) {
+    this(mustang, kosit, xmlExtractor, policy, XmlSizeLimit.DEFAULT_BYTES);
+  }
+
+  public ValidationOrchestrator(
+      MustangEngine mustang,
+      KositEngine kosit,
+      XmlExtractor xmlExtractor,
+      ConformancePolicy policy,
+      long maxXmlBytes) {
     this.mustang = mustang;
     this.kosit = kosit;
     this.xmlExtractor = xmlExtractor;
     this.policy = policy;
+    this.maxXmlBytes = maxXmlBytes;
   }
 
   public static ValidationOrchestrator createDefault() {
+    return createDefault(XmlSizeLimit.DEFAULT_BYTES);
+  }
+
+  public static ValidationOrchestrator createDefault(long maxXmlBytes) {
     FormatDetector detector = new FormatDetector();
     return new ValidationOrchestrator(
         new MustangEngine(detector),
         new KositEngine(),
         new XmlExtractor(),
-        new ConformancePolicy());
+        new ConformancePolicy(),
+        maxXmlBytes);
   }
 
   public ValidationReport validate(Path path) throws IOException {
@@ -56,7 +72,22 @@ public final class ValidationOrchestrator {
     long started = System.currentTimeMillis();
     String filename = path.getFileName().toString();
     boolean pdfInput = filename.toLowerCase(Locale.ROOT).endsWith(".pdf");
+
+    // Standalone XML: refuse before loading/validating when the file itself is too large.
+    if (!pdfInput && Files.size(path) > maxXmlBytes) {
+      return sizeLimitReport(filename, pdfInput, Files.size(path), started);
+    }
+
     String erechnungXml = xmlExtractor.extract(path);
+    long xmlBytes =
+        erechnungXml.isEmpty()
+            ? 0L
+            : erechnungXml.getBytes(StandardCharsets.UTF_8).length;
+    // PDF hybrid (or XML that passed the file-size gate): limit on extracted invoice XML.
+    if (xmlBytes > maxXmlBytes) {
+      return sizeLimitReport(filename, pdfInput, xmlBytes, started);
+    }
+
     MustangResult mustangResult = mustang.validate(path);
 
     ValidationReport report = new ValidationReport();
@@ -103,6 +134,37 @@ public final class ValidationOrchestrator {
             mustangResult.generation(),
             kositRan,
             started));
+    return report;
+  }
+
+  private ValidationReport sizeLimitReport(
+      String filename, boolean pdfInput, long xmlBytes, long startedMs) {
+    ValidationReport report = new ValidationReport();
+    report.setVerdict(Verdict.TOOL_ERROR);
+    report.setErechnungXml("");
+    report.setMustangPruefbericht("");
+    Map<String, Object> summary =
+        baseSummary(
+            filename,
+            pdfInput,
+            DetectedFormat.NOT_ERECHNUNG.name().toLowerCase(Locale.ROOT),
+            null,
+            null,
+            false,
+            startedMs);
+    summary.put("engines", Map.of("mustang", false, "kosit", false));
+    summary.put("xml_bytes", xmlBytes);
+    summary.put("max_xml_bytes", maxXmlBytes);
+    summary.put(
+        "error",
+        "invoice XML exceeds size limit: "
+            + xmlBytes
+            + " bytes > "
+            + maxXmlBytes
+            + " bytes ("
+            + XmlSizeLimit.formatMiB(maxXmlBytes)
+            + "); raise --max-xml-size or shrink the invoice");
+    report.setSummary(summary);
     return report;
   }
 

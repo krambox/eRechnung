@@ -28,9 +28,12 @@ Artifact: `target/erechnung-0.3.0.jar` (shaded Fat-JAR). Releases: attach the sa
 ```bash
 java -jar target/erechnung-0.3.0.jar validate path/to/invoice.pdf
 java -jar target/erechnung-0.3.0.jar validate path/to/invoice.xml
+java -jar target/erechnung-0.3.0.jar validate --max-xml-size=5MiB path/to/invoice.xml
 ```
 
 JSON on **stdout only**. No sidecar files.
+
+Invoice XML larger than `--max-xml-size` (default **5MiB**), whether standalone or extracted from a PDF hybrid, yields `verdict: tool_error` with `summary.error` / `xml_bytes` / `max_xml_bytes` and exit code `3` — engines are not run.
 
 ### Verdict & exit codes
 
